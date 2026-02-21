@@ -1,0 +1,1416 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0">
+<title>大饼开车啦！</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body { width: 100%; height: 100%; overflow: hidden; background: #000; font-family: 'PingFang SC', 'Heiti SC', sans-serif; touch-action: none; user-select: none; -webkit-user-select: none; }
+
+/* ========== 选车界面 ========== */
+#selectScreen {
+    position: fixed; inset: 0;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    background: linear-gradient(180deg, #FFE066 0%, #FF9A56 50%, #FF6B9D 100%);
+    z-index: 10;
+}
+#selectScreen.hidden { display: none; }
+
+.select-title {
+    font-size: 10vmin; font-weight: 900; color: #fff;
+    text-shadow: 0 0.5vmin 1vmin rgba(0,0,0,0.2);
+    margin-bottom: 3vmin;
+    animation: titleBounce 1.5s ease-in-out infinite;
+}
+@keyframes titleBounce {
+    0%, 100% { transform: translateY(0) scale(1); }
+    50% { transform: translateY(-1.5vmin) scale(1.05); }
+}
+
+.select-subtitle {
+    font-size: 4.5vmin; color: rgba(255,255,255,0.9); margin-bottom: 4vmin;
+}
+
+#vehicleGrid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 3vmin;
+    padding: 2vmin;
+    width: min(92vw, 90vh);
+}
+
+.vehicle-card {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    background: rgba(255,255,255,0.92);
+    border-radius: 4vmin;
+    padding: 3vmin 2vmin;
+    cursor: pointer;
+    transition: transform 0.15s ease;
+    box-shadow: 0 1vmin 3vmin rgba(0,0,0,0.15);
+    min-height: 26vmin;
+    min-width: 26vmin;
+}
+.vehicle-card:active { transform: scale(0.92); }
+.vehicle-card .v-emoji { font-size: 11vmin; line-height: 1.1; }
+.vehicle-card .v-name { font-size: 4vmin; font-weight: 700; color: #333; margin-top: 1.5vmin; }
+
+/* ========== 游戏界面 ========== */
+#gameScreen {
+    position: fixed; inset: 0;
+    display: none;
+}
+#gameScreen.active { display: block; }
+
+#gameCanvas {
+    width: 100vw; height: 100vh; display: block;
+}
+
+/* 分数 */
+#scoreDisplay {
+    position: fixed; top: 2.5vmin; left: 50%; transform: translateX(-50%);
+    font-size: 7vmin; font-weight: 900; color: #FFD700;
+    text-shadow: 0 0.4vmin 1vmin rgba(0,0,0,0.4);
+    pointer-events: none; z-index: 20;
+    display: flex; align-items: center; gap: 1.5vmin;
+}
+
+/* 音乐按钮 */
+#musicBtn {
+    position: fixed; top: 2vmin; right: 2vmin;
+    width: 10vmin; height: 10vmin;
+    font-size: 5.5vmin; line-height: 10vmin; text-align: center;
+    background: rgba(255,255,255,0.3); border-radius: 50%;
+    z-index: 20; cursor: pointer;
+}
+
+/* 暂停按钮 */
+#pauseBtn {
+    position: fixed; top: 14vmin; right: 2vmin;
+    width: 10vmin; height: 10vmin;
+    font-size: 5.5vmin; line-height: 10vmin; text-align: center;
+    background: rgba(255,255,255,0.3); border-radius: 50%;
+    z-index: 20; cursor: pointer;
+}
+
+/* 暂停蒙层 */
+#pauseOverlay {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.5);
+    display: none; align-items: center; justify-content: center;
+    flex-direction: column; z-index: 30; cursor: pointer;
+}
+#pauseOverlay.show { display: flex; }
+#pauseOverlay .pause-play { font-size: 22vmin; line-height: 1; filter: drop-shadow(0 1vmin 2vmin rgba(0,0,0,0.3)); }
+#pauseOverlay .pause-hint { font-size: 5vmin; color: rgba(255,255,255,0.85); margin-top: 3vmin; }
+
+/* 返回按钮 */
+#homeBtn {
+    position: fixed; top: 2vmin; left: 2vmin;
+    width: 10vmin; height: 10vmin;
+    font-size: 5.5vmin; line-height: 10vmin; text-align: center;
+    background: rgba(255,255,255,0.3); border-radius: 50%;
+    z-index: 20; cursor: pointer; opacity: 0.6;
+}
+
+/* 场景提示 */
+#sceneLabel {
+    position: fixed; top: 45%; left: 50%; transform: translate(-50%, -50%);
+    font-size: 12vmin; font-weight: 900; color: #fff;
+    text-shadow: 0 0.5vmin 2vmin rgba(0,0,0,0.4);
+    pointer-events: none; z-index: 20;
+    opacity: 0; transition: opacity 0.4s;
+}
+#sceneLabel.show { opacity: 1; }
+
+/* 庆祝文字 */
+#celebrateText {
+    position: fixed; top: 35%; left: 50%; transform: translate(-50%, -50%);
+    font-size: 14vmin; font-weight: 900; color: #FF4081;
+    text-shadow: 0 0.5vmin 2vmin rgba(0,0,0,0.3);
+    pointer-events: none; z-index: 25;
+    opacity: 0; transition: opacity 0.3s;
+}
+#celebrateText.show { opacity: 1; animation: celebPop 0.5s ease; }
+@keyframes celebPop {
+    0% { transform: translate(-50%, -50%) scale(0.3); }
+    50% { transform: translate(-50%, -50%) scale(1.15); }
+    100% { transform: translate(-50%, -50%) scale(1); }
+}
+</style>
+</head>
+<body>
+
+<!-- ========== 选车界面 ========== -->
+<div id="selectScreen">
+    <div class="select-title">大饼开车啦！</div>
+    <div class="select-subtitle">选一辆你喜欢的车吧～</div>
+    <div id="vehicleGrid"></div>
+</div>
+
+<!-- ========== 游戏界面 ========== -->
+<div id="gameScreen">
+    <canvas id="gameCanvas"></canvas>
+    <div id="scoreDisplay">⭐ <span id="scoreNum">0</span></div>
+    <div id="musicBtn">🔊</div>
+    <div id="pauseBtn">⏸</div>
+    <div id="homeBtn">🏠</div>
+    <div id="sceneLabel"></div>
+    <div id="celebrateText"></div>
+    <div id="pauseOverlay">
+        <div class="pause-play">▶️</div>
+        <div class="pause-hint">点击继续</div>
+    </div>
+</div>
+
+<script>
+// ================================================================
+//  常量
+// ================================================================
+const VEHICLES = [
+    { id: 'car',       name: '小汽车', emoji: '🚗', color: '#FF4444', bodyW: 0.16, bodyH: 0.22 },
+    { id: 'train',     name: '小火车', emoji: '🚂', color: '#4488FF', bodyW: 0.14, bodyH: 0.28 },
+    { id: 'tank',      name: '小坦克', emoji: '', color: '#44AA44', bodyW: 0.18, bodyH: 0.20,
+      cardIcon: '<svg viewBox="0 0 100 110" style="width:11vmin;height:12vmin"><rect x="5" y="15" width="17" height="80" rx="7" fill="#3a6b35"/><line x1="13.5" y1="22" x2="13.5" y2="88" stroke="#2a5525" stroke-width="6" stroke-dasharray="7 5"/><rect x="78" y="15" width="17" height="80" rx="7" fill="#3a6b35"/><line x1="86.5" y1="22" x2="86.5" y2="88" stroke="#2a5525" stroke-width="6" stroke-dasharray="7 5"/><rect x="19" y="20" width="62" height="68" rx="6" fill="#5a9b55" stroke="#4a8545" stroke-width="1.5"/><circle cx="50" cy="56" r="19" fill="#6bbb65" stroke="#5aab55" stroke-width="1.5"/><rect x="43" y="2" width="14" height="46" rx="5" fill="#4a8b45" stroke="#3a7535" stroke-width="1.5"/><circle cx="50" cy="56" r="5" fill="#5aab55"/><text x="50" y="100" text-anchor="middle" font-size="10" fill="#4a8b45" font-weight="bold">TANK</text></svg>' },
+    { id: 'firetruck', name: '消防车', emoji: '🚒', color: '#FF6600', bodyW: 0.15, bodyH: 0.26 },
+    { id: 'bus',       name: '大巴士', emoji: '🚌', color: '#FFAA00', bodyW: 0.17, bodyH: 0.26 },
+    { id: 'rocket',    name: '小火箭', emoji: '🚀', color: '#9944FF', bodyW: 0.13, bodyH: 0.26 },
+];
+
+const SCENES = [
+    { name: '城市',  emoji: '🏙️', sky: '#87CEEB', ground: '#7EC87E', road: '#666666', line: '#FFFFFF', sides: ['🏢','🏠','🏬','🏪','🏫','🏗️'] },
+    { name: '乡村',  emoji: '🌾', sky: '#9AD8F5', ground: '#3DA53D', road: '#9E8B6E', line: '#FFFFFF', sides: ['🌳','🌻','🏡','🌾','🌲','🐄'] },
+    { name: '海边',  emoji: '🏖️', sky: '#38BDF8', ground: '#F4C77D', road: '#D2B48C', line: '#FFFFFF', sides: ['🌴','🐚','⛵','🦀','🐠','🏖️'] },
+    { name: '太空',  emoji: '🌌', sky: '#0B0030', ground: '#15103A', road: '#3B2872', line: '#9F8FFF', sides: ['✨','🪐','🛸','🌙','☄️','👽'] },
+];
+
+const COLLECTIBLES = [
+    { emoji: '⭐', pts: 1 },
+    { emoji: '🪙', pts: 1 },
+    { emoji: '🍬', pts: 1 },
+    { emoji: '❤️', pts: 1 },
+    { emoji: '🎈', pts: 1 },
+    { emoji: '🌈', pts: 3 },
+];
+
+const ANIMALS = ['🐶','🐱','🐰','🐼','🦊','🐸','🐥','🐷','🐮','🦁'];
+
+const GREETINGS = [
+    'Hello!', 'Hi!', 'Hey!', '嗨!', '你好!',
+    '大饼你好啊!', '大饼~', '哈喽!', '嘿嘿~',
+    '大饼好棒!', 'Hi 大饼!', '加油大饼!',
+    '大饼冲呀!', '哇大饼!', '你好呀~',
+];
+
+const PRAISES = ['好棒！','太厉害了！','哇！','嘻嘻！','耶！','真棒！','加油！','好厉害！'];
+
+// 大饼照片（预加载）
+const PHOTOS = ['mole.jpg', '大饼3.jpg', '大饼4.jpg', '大饼2.jpg', '大饼5.jpg'];
+const photoImages = [];
+(function preloadPhotos() {
+    PHOTOS.forEach((src, i) => {
+        const img = new Image();
+        img.src = src;
+        photoImages[i] = img;
+    });
+})();
+
+// ================================================================
+//  音频引擎（Web Audio API，零外部文件）
+// ================================================================
+class AudioEngine {
+    constructor() {
+        this.ctx = null;
+        this.bgmOn = false;
+        this.bgmTimer = null;
+        this.muted = false;
+    }
+
+    init() {
+        if (this.ctx) return;
+        this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+
+    resume() {
+        if (this.ctx && this.ctx.state === 'suspended') this.ctx.resume();
+    }
+
+    _note(freq, dur, start, type, vol) {
+        if (!this.ctx || this.muted) return;
+        const o = this.ctx.createOscillator();
+        const g = this.ctx.createGain();
+        o.type = type || 'sine';
+        o.frequency.value = freq;
+        g.gain.setValueAtTime(vol || 0.25, start);
+        g.gain.exponentialRampToValueAtTime(0.001, start + dur);
+        o.connect(g); g.connect(this.ctx.destination);
+        o.start(start); o.stop(start + dur + 0.05);
+    }
+
+    playCollect() {
+        if (!this.ctx) return;
+        const t = this.ctx.currentTime;
+        this._note(784, 0.1, t, 'sine', 0.3);
+        this._note(1047, 0.15, t + 0.07, 'sine', 0.25);
+    }
+
+    playBonus() {
+        if (!this.ctx) return;
+        const t = this.ctx.currentTime;
+        [523, 659, 784, 1047].forEach((f, i) => this._note(f, 0.12, t + i * 0.08, 'sine', 0.25));
+    }
+
+    playAnimalSound() {
+        if (!this.ctx) return;
+        const t = this.ctx.currentTime;
+        const o = this.ctx.createOscillator();
+        const g = this.ctx.createGain();
+        o.type = 'sine';
+        o.frequency.setValueAtTime(350, t);
+        o.frequency.exponentialRampToValueAtTime(700, t + 0.08);
+        o.frequency.exponentialRampToValueAtTime(450, t + 0.2);
+        g.gain.setValueAtTime(0.25, t);
+        g.gain.exponentialRampToValueAtTime(0.001, t + 0.3);
+        o.connect(g); g.connect(this.ctx.destination);
+        o.start(t); o.stop(t + 0.35);
+    }
+
+    playSceneChange() {
+        if (!this.ctx) return;
+        const t = this.ctx.currentTime;
+        [392, 523, 659].forEach((f, i) => this._note(f, 0.35, t + i * 0.15, 'triangle', 0.15));
+    }
+
+    startBGM() {
+        if (this.bgmOn) return;
+        this.bgmOn = true;
+        this._loopBGM();
+    }
+
+    _loopBGM() {
+        if (!this.bgmOn || !this.ctx) return;
+        // 小星星旋律
+        const melody = [
+            262, 262, 392, 392, 440, 440, 392, 0,
+            349, 349, 330, 330, 294, 294, 262, 0,
+            392, 392, 349, 349, 330, 330, 294, 0,
+            392, 392, 349, 349, 330, 330, 294, 0,
+            262, 262, 392, 392, 440, 440, 392, 0,
+            349, 349, 330, 330, 294, 294, 262, 0
+        ];
+        const nd = 0.22;
+        const t = this.ctx.currentTime + 0.05;
+        melody.forEach((f, i) => {
+            if (f > 0) this._note(f, nd * 0.75, t + i * nd, 'sine', 0.08);
+        });
+        this.bgmTimer = setTimeout(() => this._loopBGM(), melody.length * nd * 1000);
+    }
+
+    stopBGM() {
+        this.bgmOn = false;
+        if (this.bgmTimer) { clearTimeout(this.bgmTimer); this.bgmTimer = null; }
+    }
+
+    toggleBGM() {
+        if (this.bgmOn) this.stopBGM(); else this.startBGM();
+        return this.bgmOn;
+    }
+}
+
+// ================================================================
+//  游戏主逻辑
+// ================================================================
+class Game {
+    constructor() {
+        this.canvas = document.getElementById('gameCanvas');
+        this.ctx = this.canvas.getContext('2d');
+        this.audio = new AudioEngine();
+        this.dpr = window.devicePixelRatio || 1;
+
+        // 逻辑尺寸
+        this.W = 0; this.H = 0;
+
+        // 状态
+        this.running = false;
+        this.vehicle = null;
+        this.score = 0;
+        this.totalCollected = 0;
+
+        // 道路
+        this.roadScrollY = 0;
+        this.scrollSpeed = 0; // px/s，会根据屏幕大小设置
+
+        // 车辆位置
+        this.vx = 0; this.vy = 0;
+        this.targetX = 0;
+        this.touchActive = false;
+
+        // 可收集物
+        this.collectibles = [];
+        this.collectTimer = 0;
+        this.collectInterval = 1800; // ms
+
+        // 动物
+        this.animals = [];
+        this.animalTimer = 0;
+        this.animalInterval = 12000; // ms
+
+        // 粒子
+        this.particles = [];
+
+        // 飘字
+        this.popups = [];
+
+        // 场景
+        this.sceneIndex = 0;
+        this.sceneTimer = 0;
+        this.sceneDuration = 28000; // ms
+        this.sceneTransition = 0; // 0~1
+
+        // 侧边装饰滚动元素
+        this.sideElements = [];
+
+        // 庆祝里程碑
+        this.nextMilestone = 10;
+
+        // 暂停
+        this.paused = false;
+        this.bgmWasOn = false;
+
+        // 大饼照片
+        this.currentPhoto = null;
+
+        // 键盘状态
+        this.keysDown = { left: false, right: false };
+        this.keySpeed = 0;
+
+        // 上一帧时间
+        this.lastTime = 0;
+        this.animFrameId = null;
+
+        this._resize();
+        window.addEventListener('resize', () => this._resize());
+    }
+
+    _resize() {
+        this.W = window.innerWidth;
+        this.H = window.innerHeight;
+        this.canvas.width = this.W * this.dpr;
+        this.canvas.height = this.H * this.dpr;
+        this.canvas.style.width = this.W + 'px';
+        this.canvas.style.height = this.H + 'px';
+        this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+
+        // 根据屏幕计算关键尺寸
+        this.roadW = this.W * 0.52;
+        this.roadL = (this.W - this.roadW) / 2;
+        this.roadR = this.roadL + this.roadW;
+        this.laneW = this.roadW / 3;
+        this.scrollSpeed = this.H * 0.28; // 每秒滚过屏幕高度的 28%
+        this.keySpeed = this.W * 0.45;  // 键盘移动速度
+
+        if (this.vehicle) {
+            this.vy = this.H * 0.76;
+            this.vx = Math.max(this.roadL + this.laneW * 0.5, Math.min(this.vx, this.roadR - this.laneW * 0.5));
+            this.targetX = this.vx;
+        }
+    }
+
+    // -------- 初始化侧边装饰 --------
+    _initSideElements() {
+        this.sideElements = [];
+        const scene = SCENES[this.sceneIndex];
+        const spacing = this.H * 0.22;
+        const count = Math.ceil(this.H / spacing) + 3;
+        for (let i = 0; i < count; i++) {
+            // 左侧
+            this.sideElements.push({
+                x: this.roadL * 0.35 + Math.random() * this.roadL * 0.35,
+                y: i * spacing - spacing,
+                emoji: scene.sides[Math.floor(Math.random() * scene.sides.length)],
+                side: 'left'
+            });
+            // 右侧
+            this.sideElements.push({
+                x: this.roadR + (this.W - this.roadR) * 0.2 + Math.random() * (this.W - this.roadR) * 0.45,
+                y: i * spacing - spacing + spacing * 0.5,
+                emoji: scene.sides[Math.floor(Math.random() * scene.sides.length)],
+                side: 'right'
+            });
+        }
+    }
+
+    // -------- 开始游戏 --------
+    start(vehicleData) {
+        this.vehicle = vehicleData;
+        this.score = 0;
+        this.totalCollected = 0;
+        this.collectibles = [];
+        this.animals = [];
+        this.particles = [];
+        this.popups = [];
+        this.sceneIndex = 0;
+        this.sceneTimer = 0;
+        this.sceneTransition = 0;
+        this.collectTimer = 0;
+        this.animalTimer = 0;
+        this.nextMilestone = 10;
+        this.roadScrollY = 0;
+
+        this.vx = this.W / 2;
+        this.vy = this.H * 0.76;
+        this.targetX = this.vx;
+        this.touchActive = false;
+        this.keysDown = { left: false, right: false };
+        this.paused = false;
+        document.getElementById('pauseOverlay').classList.remove('show');
+        document.getElementById('pauseBtn').textContent = '⏸';
+
+        // 随机选一张大饼照片
+        this.currentPhoto = photoImages[Math.floor(Math.random() * photoImages.length)];
+
+        this.collectTimer = this.collectInterval - 600; // 快速出现第一个收集物
+
+        this._initSideElements();
+        this._updateScoreDisplay();
+
+        document.getElementById('selectScreen').classList.add('hidden');
+        document.getElementById('gameScreen').classList.add('active');
+
+        this.audio.init();
+        this.audio.resume();
+        this.audio.startBGM();
+        document.getElementById('musicBtn').textContent = '🔊';
+
+        // 取消旧的动画循环（防止重复启动）
+        if (this.animFrameId) cancelAnimationFrame(this.animFrameId);
+
+        this.running = true;
+        this.lastTime = performance.now();
+        this._render(); // 立即绘制第一帧
+        this.animFrameId = requestAnimationFrame((t) => this._loop(t));
+
+        // 保存上次选择
+        try { localStorage.setItem('dabing_travel_lastVehicle', vehicleData.id); } catch(e) {}
+    }
+
+    stop() {
+        this.running = false;
+        if (this.animFrameId) { cancelAnimationFrame(this.animFrameId); this.animFrameId = null; }
+        this.audio.stopBGM();
+        document.getElementById('gameScreen').classList.remove('active');
+        document.getElementById('selectScreen').classList.remove('hidden');
+        // 保存最高分
+        try {
+            const prev = parseInt(localStorage.getItem('dabing_travel_highscore') || '0');
+            if (this.score > prev) localStorage.setItem('dabing_travel_highscore', String(this.score));
+        } catch(e) {}
+    }
+
+    // -------- 暂停/继续 --------
+    togglePause() {
+        if (!this.running) return;
+        this.paused = !this.paused;
+        const overlay = document.getElementById('pauseOverlay');
+        const btn = document.getElementById('pauseBtn');
+        if (this.paused) {
+            overlay.classList.add('show');
+            btn.textContent = '▶';
+            this.bgmWasOn = this.audio.bgmOn;
+            this.audio.stopBGM();
+        } else {
+            overlay.classList.remove('show');
+            btn.textContent = '⏸';
+            this.lastTime = performance.now(); // 防止恢复时 dt 跳变
+            if (this.bgmWasOn) this.audio.startBGM();
+        }
+    }
+
+    // -------- 主循环 --------
+    _loop(now) {
+        if (!this.running) return;
+        const dt = Math.min((now - this.lastTime) / 1000, 0.05); // 上限 50ms
+        this.lastTime = now;
+
+        if (!this.paused) {
+            this._update(dt);
+        }
+        this._render();
+
+        this.animFrameId = requestAnimationFrame((t) => this._loop(t));
+    }
+
+    // -------- 更新 --------
+    _update(dt) {
+        const dtMs = dt * 1000;
+
+        // 道路滚动
+        this.roadScrollY += this.scrollSpeed * dt;
+
+        // 车辆跟随触摸
+        if (this.touchActive) {
+            this.vx += (this.targetX - this.vx) * Math.min(dt * 10, 1);
+        }
+        // 键盘左右键控制
+        if (this.keysDown.left)  this.vx -= this.keySpeed * dt;
+        if (this.keysDown.right) this.vx += this.keySpeed * dt;
+        // 限制范围
+        const halfVW = this.vehicle.bodyW * this.W * 0.5;
+        this.vx = Math.max(this.roadL + halfVW, Math.min(this.vx, this.roadR - halfVW));
+
+        // 侧边装饰滚动
+        const spacing = this.H * 0.22;
+        const scene = SCENES[this.sceneIndex];
+        for (const el of this.sideElements) {
+            el.y += this.scrollSpeed * dt;
+            if (el.y > this.H + 60) {
+                el.y -= (Math.ceil(this.H / spacing) + 3) * spacing;
+                el.emoji = scene.sides[Math.floor(Math.random() * scene.sides.length)];
+                if (el.side === 'left') {
+                    el.x = this.roadL * 0.2 + Math.random() * this.roadL * 0.5;
+                } else {
+                    el.x = this.roadR + (this.W - this.roadR) * 0.15 + Math.random() * (this.W - this.roadR) * 0.5;
+                }
+            }
+        }
+
+        // 生成收集物
+        this.collectTimer += dtMs;
+        if (this.collectTimer >= this.collectInterval && this.collectibles.length < 4) {
+            this.collectTimer = 0;
+            this.collectInterval = 1500 + Math.random() * 1200;
+            this._spawnCollectible();
+        }
+
+        // 更新收集物
+        for (let i = this.collectibles.length - 1; i >= 0; i--) {
+            const c = this.collectibles[i];
+            c.y += this.scrollSpeed * dt;
+            c.age += dtMs;
+            // 碰撞检测
+            const dx = c.x - this.vx;
+            const dy = c.y - this.vy;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            const hitR = this.W * 0.08;
+            if (dist < hitR) {
+                this._collectItem(c);
+                this.collectibles.splice(i, 1);
+                continue;
+            }
+            // 离开屏幕
+            if (c.y > this.H + 80) {
+                this.collectibles.splice(i, 1);
+            }
+        }
+
+        // 生成动物
+        this.animalTimer += dtMs;
+        if (this.animalTimer >= this.animalInterval && this.animals.length < 2) {
+            this.animalTimer = 0;
+            this.animalInterval = 10000 + Math.random() * 10000;
+            this._spawnAnimal();
+        }
+
+        // 更新动物
+        for (let i = this.animals.length - 1; i >= 0; i--) {
+            const a = this.animals[i];
+            a.y += this.scrollSpeed * dt * 0.6;
+            a.age += dtMs;
+            a.wave = Math.sin(a.age / 300) * 10;
+            // 语言泡泡透明度动画
+            const bubbleAge = a.age - a.bubbleDelay;
+            if (bubbleAge < 0) {
+                a.bubbleAlpha = 0;
+            } else if (bubbleAge < 250) {
+                a.bubbleAlpha = bubbleAge / 250; // 淡入
+            } else if (bubbleAge < a.bubbleDuration - 400) {
+                a.bubbleAlpha = 1; // 完全显示
+            } else if (bubbleAge < a.bubbleDuration) {
+                a.bubbleAlpha = (a.bubbleDuration - bubbleAge) / 400; // 淡出
+            } else {
+                a.bubbleAlpha = 0;
+            }
+            if (a.y > this.H + 100) {
+                this.animals.splice(i, 1);
+            }
+        }
+
+        // 更新粒子
+        for (let i = this.particles.length - 1; i >= 0; i--) {
+            const p = this.particles[i];
+            p.x += p.vx * dt;
+            p.y += p.vy * dt;
+            p.life -= dt;
+            if (p.life <= 0) this.particles.splice(i, 1);
+        }
+
+        // 更新飘字
+        for (let i = this.popups.length - 1; i >= 0; i--) {
+            const pp = this.popups[i];
+            pp.y -= 80 * dt;
+            pp.life -= dt;
+            if (pp.life <= 0) this.popups.splice(i, 1);
+        }
+
+        // 场景切换
+        this.sceneTimer += dtMs;
+        if (this.sceneTimer >= this.sceneDuration) {
+            this.sceneTimer = 0;
+            const oldIndex = this.sceneIndex;
+            this.sceneIndex = (this.sceneIndex + 1) % SCENES.length;
+            this._initSideElements();
+            this.audio.playSceneChange();
+            this._showSceneLabel(SCENES[this.sceneIndex]);
+        }
+    }
+
+    // -------- 生成收集物 --------
+    _spawnCollectible() {
+        const lane = Math.floor(Math.random() * 3);
+        const cx = this.roadL + this.laneW * (lane + 0.5);
+        const type = COLLECTIBLES[Math.floor(Math.random() * COLLECTIBLES.length)];
+        this.collectibles.push({
+            x: cx + (Math.random() - 0.5) * this.laneW * 0.3,
+            y: -50,
+            type: type,
+            age: 0,
+            bobPhase: Math.random() * Math.PI * 2,
+        });
+    }
+
+    // -------- 收集道具 --------
+    _collectItem(c) {
+        this.score += c.type.pts;
+        this.totalCollected++;
+        this._updateScoreDisplay();
+        this.audio.playCollect();
+
+        // 粒子特效
+        const colors = ['#FFD700', '#FF69B4', '#00BFFF', '#7FFF00', '#FF6347', '#DA70D6'];
+        for (let i = 0; i < 10; i++) {
+            const angle = (Math.PI * 2 / 10) * i;
+            const speed = 120 + Math.random() * 100;
+            this.particles.push({
+                x: c.x, y: c.y,
+                vx: Math.cos(angle) * speed,
+                vy: Math.sin(angle) * speed,
+                life: 0.6 + Math.random() * 0.3,
+                maxLife: 0.9,
+                color: colors[Math.floor(Math.random() * colors.length)],
+                size: 3 + Math.random() * 4,
+            });
+        }
+
+        // 飘字
+        this.popups.push({ x: c.x, y: c.y, text: '+' + c.type.pts, life: 0.8, maxLife: 0.8 });
+
+        // 彩虹额外庆祝
+        if (c.type.pts > 1) {
+            this.audio.playBonus();
+            this.popups.push({ x: c.x, y: c.y - 30, text: '🌈', life: 1.0, maxLife: 1.0 });
+        }
+
+        // 里程碑庆祝
+        if (this.totalCollected >= this.nextMilestone) {
+            this.nextMilestone += 10;
+            this._showCelebration();
+        }
+    }
+
+    // -------- 生成动物 --------
+    _spawnAnimal() {
+        const side = Math.random() < 0.5 ? 'left' : 'right';
+        const x = side === 'left'
+            ? this.roadL * 0.4
+            : this.roadR + (this.W - this.roadR) * 0.6;
+        this.animals.push({
+            x: x,
+            y: -60,
+            emoji: ANIMALS[Math.floor(Math.random() * ANIMALS.length)],
+            side: side,
+            age: 0,
+            wave: 0,
+            // 语言泡泡
+            greeting: GREETINGS[Math.floor(Math.random() * GREETINGS.length)],
+            bubbleDelay: 400 + Math.random() * 400,  // 出现后延迟弹出
+            bubbleDuration: 3500,                      // 泡泡持续时间
+            bubbleAlpha: 0,                            // 当前透明度
+        });
+        this.audio.playAnimalSound();
+    }
+
+    // -------- 渲染 --------
+    _render() {
+        const ctx = this.ctx;
+        const W = this.W, H = this.H;
+        const scene = SCENES[this.sceneIndex];
+
+        // 背景天空
+        ctx.fillStyle = scene.sky;
+        ctx.fillRect(0, 0, W, H);
+
+        // 两侧地面
+        ctx.fillStyle = scene.ground;
+        ctx.fillRect(0, 0, this.roadL, H);
+        ctx.fillRect(this.roadR, 0, W - this.roadR, H);
+
+        // 侧边装饰
+        ctx.font = (W * 0.07) + 'px serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        for (const el of this.sideElements) {
+            ctx.fillText(el.emoji, el.x, el.y);
+        }
+
+        // 道路
+        ctx.fillStyle = scene.road;
+        ctx.fillRect(this.roadL, 0, this.roadW, H);
+
+        // 道路边线
+        ctx.strokeStyle = scene.line;
+        ctx.lineWidth = W * 0.008;
+        ctx.beginPath();
+        ctx.moveTo(this.roadL, 0); ctx.lineTo(this.roadL, H);
+        ctx.moveTo(this.roadR, 0); ctx.lineTo(this.roadR, H);
+        ctx.stroke();
+
+        // 车道线（虚线滚动）
+        const dashLen = H * 0.06;
+        const gapLen = H * 0.05;
+        const totalDash = dashLen + gapLen;
+        const offset = this.roadScrollY % totalDash;
+        ctx.strokeStyle = scene.line;
+        ctx.lineWidth = W * 0.005;
+        ctx.setLineDash([dashLen, gapLen]);
+        for (let lane = 1; lane < 3; lane++) {
+            const lx = this.roadL + this.laneW * lane;
+            ctx.beginPath();
+            ctx.moveTo(lx, -totalDash + offset);
+            ctx.lineTo(lx, H + totalDash);
+            ctx.stroke();
+        }
+        ctx.setLineDash([]);
+
+        // 动物 + 语言泡泡
+        const animalSize = W * 0.1;
+        for (const a of this.animals) {
+            // 动物本体
+            ctx.font = animalSize + 'px serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.save();
+            ctx.translate(a.x, a.y);
+            ctx.rotate(a.wave * Math.PI / 180);
+            ctx.fillText(a.emoji, 0, 0);
+            ctx.restore();
+
+            // 语言泡泡
+            if (a.bubbleAlpha > 0.01) {
+                ctx.save();
+                ctx.globalAlpha = a.bubbleAlpha;
+
+                // 测量文字宽度
+                const bFontSize = Math.max(12, W * 0.035);
+                ctx.font = 'bold ' + bFontSize + 'px "PingFang SC","Heiti SC",sans-serif';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                const textW = ctx.measureText(a.greeting).width;
+                const padX = bFontSize * 0.6;
+                const padY = bFontSize * 0.45;
+                const bw = textW + padX * 2;
+                const bh = bFontSize + padY * 2;
+                const br = bh * 0.35; // 圆角
+
+                // 泡泡位置：动物上方，偏向道路方向
+                const bubbleX = a.x + (a.side === 'left' ? animalSize * 0.5 : -animalSize * 0.5);
+                const bubbleY = a.y - animalSize * 0.65;
+                // 小尾巴指向方向
+                const tailDir = a.side === 'left' ? -1 : 1;
+
+                // 泡泡弹跳动画
+                const bounce = a.bubbleAlpha < 1 ? (1 - a.bubbleAlpha) * 3 : 0;
+                const by = bubbleY - bounce;
+
+                // 泡泡阴影
+                ctx.fillStyle = 'rgba(0,0,0,0.1)';
+                this._roundRect(ctx, bubbleX - bw/2 + 2, by - bh/2 + 2, bw, bh, br);
+                ctx.fill();
+
+                // 泡泡白色背景
+                ctx.fillStyle = '#FFFFFF';
+                this._roundRect(ctx, bubbleX - bw/2, by - bh/2, bw, bh, br);
+                ctx.fill();
+                ctx.strokeStyle = 'rgba(0,0,0,0.12)';
+                ctx.lineWidth = 1;
+                ctx.stroke();
+
+                // 小三角尾巴（指向动物）
+                ctx.fillStyle = '#FFFFFF';
+                ctx.beginPath();
+                const tx = bubbleX + tailDir * bw * 0.15;
+                ctx.moveTo(tx - 6, by + bh/2 - 1);
+                ctx.lineTo(tx + tailDir * 2, by + bh/2 + bFontSize * 0.5);
+                ctx.lineTo(tx + 6, by + bh/2 - 1);
+                ctx.closePath();
+                ctx.fill();
+
+                // 文字
+                ctx.fillStyle = '#333';
+                ctx.fillText(a.greeting, bubbleX, by);
+
+                ctx.restore();
+            }
+        }
+
+        // 收集物
+        const cSize = W * 0.09;
+        ctx.font = cSize + 'px serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        for (const c of this.collectibles) {
+            const bob = Math.sin(c.bobPhase + c.age / 250) * 5;
+            const scale = 1 + Math.sin(c.age / 400) * 0.08;
+            ctx.save();
+            ctx.translate(c.x, c.y + bob);
+            ctx.scale(scale, scale);
+            ctx.fillText(c.type.emoji, 0, 0);
+            ctx.restore();
+        }
+
+        // 车辆
+        this._drawVehicle(ctx);
+
+        // 粒子
+        for (const p of this.particles) {
+            const alpha = Math.max(0, p.life / p.maxLife);
+            ctx.globalAlpha = alpha;
+            ctx.fillStyle = p.color;
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+            ctx.fill();
+        }
+        ctx.globalAlpha = 1;
+
+        // 飘字
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        for (const pp of this.popups) {
+            const alpha = Math.max(0, pp.life / pp.maxLife);
+            ctx.globalAlpha = alpha;
+            ctx.font = 'bold ' + (W * 0.07) + 'px sans-serif';
+            ctx.fillStyle = '#FFD700';
+            ctx.strokeStyle = '#333';
+            ctx.lineWidth = 2;
+            ctx.strokeText(pp.text, pp.x, pp.y);
+            ctx.fillText(pp.text, pp.x, pp.y);
+        }
+        ctx.globalAlpha = 1;
+    }
+
+    // -------- 绘制车辆 + 大饼 --------
+    _drawVehicle(ctx) {
+        const v = this.vehicle;
+        const vw = this.W * v.bodyW;
+        const vh = this.W * v.bodyH;
+        const cx = this.vx;
+        const cy = this.vy;
+
+        ctx.save();
+        ctx.translate(cx, cy);
+
+        // 车身（小汽车单独绘制更精细的造型）
+        if (v.id !== 'car') {
+            ctx.fillStyle = 'rgba(0,0,0,0.15)';
+            this._roundRect(ctx, -vw/2 + 4, -vh/2 + 6, vw, vh, vw * 0.2);
+            ctx.fill();
+            ctx.fillStyle = v.color;
+            this._roundRect(ctx, -vw/2, -vh/2, vw, vh, vw * 0.2);
+            ctx.fill();
+        }
+
+        // 根据类型绘制细节
+        switch(v.id) {
+            case 'car': {
+                // ======== 写实风格轿车俯视图 ========
+                // 车底阴影
+                ctx.fillStyle = 'rgba(0,0,0,0.13)';
+                ctx.beginPath();
+                ctx.ellipse(3, 5, vw*0.48, vh*0.46, 0, 0, Math.PI*2);
+                ctx.fill();
+
+                // 轮子（先画，在车身下方露出）
+                [[-1,-1],[1,-1],[-1,1],[1,1]].forEach(([sx,sy]) => {
+                    const wx = sx * vw * 0.46;
+                    const wy = sy * vh * 0.3;
+                    ctx.fillStyle = '#1a1a1a';
+                    ctx.beginPath();
+                    ctx.ellipse(wx, wy, vw*0.1, vh*0.07, 0, 0, Math.PI*2);
+                    ctx.fill();
+                    ctx.fillStyle = '#777';
+                    ctx.beginPath();
+                    ctx.ellipse(wx, wy, vw*0.06, vh*0.042, 0, 0, Math.PI*2);
+                    ctx.fill();
+                    ctx.fillStyle = '#999';
+                    ctx.beginPath();
+                    ctx.arc(wx, wy, vw*0.02, 0, Math.PI*2);
+                    ctx.fill();
+                });
+
+                // 车身轮廓（前窄后宽的流线型）
+                ctx.fillStyle = v.color;
+                ctx.beginPath();
+                ctx.moveTo(-vw*0.3, -vh*0.44);
+                ctx.quadraticCurveTo(0, -vh*0.49, vw*0.3, -vh*0.44);
+                ctx.lineTo(vw*0.42, -vh*0.15);
+                ctx.lineTo(vw*0.44, vh*0.28);
+                ctx.quadraticCurveTo(vw*0.42, vh*0.44, 0, vh*0.46);
+                ctx.quadraticCurveTo(-vw*0.42, vh*0.44, -vw*0.44, vh*0.28);
+                ctx.lineTo(-vw*0.42, -vh*0.15);
+                ctx.closePath();
+                ctx.fill();
+
+                // 金属光泽
+                const carGrad = ctx.createLinearGradient(-vw*0.44, 0, vw*0.44, 0);
+                carGrad.addColorStop(0, 'rgba(0,0,0,0.1)');
+                carGrad.addColorStop(0.3, 'rgba(255,255,255,0.18)');
+                carGrad.addColorStop(0.5, 'rgba(255,255,255,0.22)');
+                carGrad.addColorStop(0.7, 'rgba(255,255,255,0.18)');
+                carGrad.addColorStop(1, 'rgba(0,0,0,0.1)');
+                ctx.fillStyle = carGrad;
+                ctx.fill();
+
+                // 车身边缘高光线
+                ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+                ctx.lineWidth = 1;
+                ctx.stroke();
+
+                // 引擎盖中线
+                ctx.strokeStyle = 'rgba(0,0,0,0.1)';
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                ctx.moveTo(0, -vh*0.46);
+                ctx.lineTo(0, -vh*0.22);
+                ctx.stroke();
+
+                // 前挡风玻璃
+                ctx.fillStyle = 'rgba(120,200,255,0.8)';
+                ctx.beginPath();
+                ctx.moveTo(-vw*0.32, -vh*0.18);
+                ctx.lineTo(-vw*0.25, -vh*0.36);
+                ctx.quadraticCurveTo(0, -vh*0.4, vw*0.25, -vh*0.36);
+                ctx.lineTo(vw*0.32, -vh*0.18);
+                ctx.closePath();
+                ctx.fill();
+                // 玻璃反光
+                ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+                ctx.lineWidth = 1.5;
+                ctx.beginPath();
+                ctx.moveTo(-vw*0.1, -vh*0.33);
+                ctx.quadraticCurveTo(vw*0.02, -vh*0.35, vw*0.14, -vh*0.31);
+                ctx.stroke();
+
+                // 后挡风玻璃
+                ctx.fillStyle = 'rgba(120,200,255,0.65)';
+                ctx.beginPath();
+                ctx.moveTo(-vw*0.32, vh*0.1);
+                ctx.lineTo(-vw*0.35, vh*0.26);
+                ctx.quadraticCurveTo(0, vh*0.33, vw*0.35, vh*0.26);
+                ctx.lineTo(vw*0.32, vh*0.1);
+                ctx.closePath();
+                ctx.fill();
+
+                // 车顶高光
+                ctx.fillStyle = 'rgba(255,255,255,0.1)';
+                this._roundRect(ctx, -vw*0.25, -vh*0.16, vw*0.5, vh*0.25, vw*0.1);
+                ctx.fill();
+
+                // 前大灯
+                ctx.fillStyle = '#FFF8CC';
+                ctx.shadowColor = '#FFE066';
+                ctx.shadowBlur = 5;
+                [-1, 1].forEach(sx => {
+                    ctx.beginPath();
+                    ctx.ellipse(sx * vw*0.22, -vh*0.43, vw*0.06, vh*0.022, 0, 0, Math.PI*2);
+                    ctx.fill();
+                });
+                ctx.shadowBlur = 0;
+
+                // 尾灯
+                ctx.fillStyle = '#FF2233';
+                ctx.shadowColor = '#FF0000';
+                ctx.shadowBlur = 4;
+                [-1, 1].forEach(sx => {
+                    ctx.beginPath();
+                    ctx.ellipse(sx * vw*0.3, vh*0.4, vw*0.06, vh*0.02, 0, 0, Math.PI*2);
+                    ctx.fill();
+                });
+                ctx.shadowBlur = 0;
+
+                // 后视镜
+                ctx.fillStyle = '#444';
+                ctx.beginPath();
+                ctx.ellipse(-vw*0.48, -vh*0.14, vw*0.04, vh*0.018, 0.3, 0, Math.PI*2);
+                ctx.fill();
+                ctx.beginPath();
+                ctx.ellipse(vw*0.48, -vh*0.14, vw*0.04, vh*0.018, -0.3, 0, Math.PI*2);
+                ctx.fill();
+
+                break;
+            }
+            case 'train':
+                // 烟囱
+                ctx.fillStyle = '#333';
+                this._roundRect(ctx, -vw*0.15, -vh*0.52, vw*0.3, vh*0.1, vw*0.05);
+                ctx.fill();
+                // 窗户
+                ctx.fillStyle = '#AAD8FF';
+                this._roundRect(ctx, -vw*0.3, -vh*0.25, vw*0.6, vh*0.18, vw*0.05);
+                ctx.fill();
+                // 车轮（两排）
+                ctx.fillStyle = '#333';
+                [-1,1].forEach(sx => {
+                    for (let r = -1; r <= 1; r += 0.7) {
+                        ctx.beginPath();
+                        ctx.arc(sx * vw * 0.45, r * vh * 0.25, vw * 0.07, 0, Math.PI*2);
+                        ctx.fill();
+                    }
+                });
+                break;
+            case 'tank':
+                // 履带
+                ctx.fillStyle = '#2A7A2A';
+                this._roundRect(ctx, -vw*0.52, -vh*0.42, vw*0.22, vh*0.84, vw*0.08);
+                ctx.fill();
+                this._roundRect(ctx, vw*0.3, -vh*0.42, vw*0.22, vh*0.84, vw*0.08);
+                ctx.fill();
+                // 炮塔
+                ctx.fillStyle = '#3B8B3B';
+                ctx.beginPath();
+                ctx.arc(0, vh*0.05, vw*0.28, 0, Math.PI*2);
+                ctx.fill();
+                // 炮管
+                ctx.fillStyle = '#2A6A2A';
+                this._roundRect(ctx, -vw*0.06, -vh*0.55, vw*0.12, vh*0.45, vw*0.04);
+                ctx.fill();
+                break;
+            case 'firetruck':
+                // 窗户
+                ctx.fillStyle = '#AAD8FF';
+                this._roundRect(ctx, -vw*0.32, -vh*0.38, vw*0.64, vh*0.18, vw*0.06);
+                ctx.fill();
+                // 云梯
+                ctx.strokeStyle = '#CCC';
+                ctx.lineWidth = vw * 0.04;
+                ctx.beginPath();
+                ctx.moveTo(0, -vh*0.1);
+                ctx.lineTo(0, vh*0.35);
+                ctx.stroke();
+                // 警灯
+                ctx.fillStyle = '#FF0000';
+                ctx.beginPath();
+                ctx.arc(-vw*0.15, -vh*0.44, vw*0.06, 0, Math.PI*2);
+                ctx.fill();
+                ctx.fillStyle = '#0088FF';
+                ctx.beginPath();
+                ctx.arc(vw*0.15, -vh*0.44, vw*0.06, 0, Math.PI*2);
+                ctx.fill();
+                // 轮子
+                ctx.fillStyle = '#333';
+                [[-1,-1],[1,-1],[-1,1],[1,1]].forEach(([sx,sy]) => {
+                    ctx.beginPath();
+                    ctx.ellipse(sx * vw * 0.46, sy * vh * 0.36, vw*0.07, vh*0.06, 0, 0, Math.PI*2);
+                    ctx.fill();
+                });
+                break;
+            case 'bus':
+                // 窗户（一排）
+                ctx.fillStyle = '#AAD8FF';
+                for (let i = -1; i <= 1; i++) {
+                    this._roundRect(ctx, -vw*0.32, -vh*0.05 + i * vh*0.22, vw*0.64, vh*0.15, vw*0.04);
+                    ctx.fill();
+                }
+                // 轮子
+                ctx.fillStyle = '#333';
+                [[-1,-1],[1,-1],[-1,1],[1,1]].forEach(([sx,sy]) => {
+                    ctx.beginPath();
+                    ctx.ellipse(sx * vw * 0.47, sy * vh * 0.38, vw*0.07, vh*0.06, 0, 0, Math.PI*2);
+                    ctx.fill();
+                });
+                break;
+            case 'rocket':
+                // 尖头
+                ctx.fillStyle = '#FF4444';
+                ctx.beginPath();
+                ctx.moveTo(0, -vh*0.55);
+                ctx.lineTo(-vw*0.35, -vh*0.25);
+                ctx.lineTo(vw*0.35, -vh*0.25);
+                ctx.closePath();
+                ctx.fill();
+                // 尾翼
+                ctx.fillStyle = '#FF6644';
+                ctx.beginPath();
+                ctx.moveTo(-vw*0.35, vh*0.35);
+                ctx.lineTo(-vw*0.55, vh*0.52);
+                ctx.lineTo(-vw*0.2, vh*0.35);
+                ctx.closePath();
+                ctx.fill();
+                ctx.beginPath();
+                ctx.moveTo(vw*0.35, vh*0.35);
+                ctx.lineTo(vw*0.55, vh*0.52);
+                ctx.lineTo(vw*0.2, vh*0.35);
+                ctx.closePath();
+                ctx.fill();
+                // 舷窗
+                ctx.fillStyle = '#AAD8FF';
+                ctx.beginPath();
+                ctx.arc(0, -vh*0.05, vw*0.15, 0, Math.PI*2);
+                ctx.fill();
+                // 火焰
+                const flicker = Math.random() * 8;
+                ctx.fillStyle = '#FFAA00';
+                ctx.beginPath();
+                ctx.moveTo(-vw*0.2, vh*0.45);
+                ctx.lineTo(0, vh*0.65 + flicker);
+                ctx.lineTo(vw*0.2, vh*0.45);
+                ctx.closePath();
+                ctx.fill();
+                ctx.fillStyle = '#FF4400';
+                ctx.beginPath();
+                ctx.moveTo(-vw*0.12, vh*0.45);
+                ctx.lineTo(0, vh*0.55 + flicker * 0.5);
+                ctx.lineTo(vw*0.12, vh*0.45);
+                ctx.closePath();
+                ctx.fill();
+                break;
+        }
+
+        // 大饼的照片（圆形头像）
+        const faceR = vw * 0.25;
+        const faceY = v.id === 'rocket' ? -vh * 0.05 : -vh * 0.08;
+        const photo = this.currentPhoto;
+
+        if (photo && photo.complete && photo.naturalWidth > 0) {
+            // 圆形裁剪绘制真实照片
+            ctx.save();
+            ctx.beginPath();
+            ctx.arc(0, faceY, faceR, 0, Math.PI * 2);
+            ctx.closePath();
+            ctx.clip();
+            // 居中偏上裁剪（人脸通常在照片上半部分）
+            const iw = photo.naturalWidth, ih = photo.naturalHeight;
+            const minDim = Math.min(iw, ih);
+            const sx = (iw - minDim) / 2;
+            const sy = (ih - minDim) * 0.15; // 偏上取脸部
+            ctx.drawImage(photo, sx, sy, minDim, minDim,
+                -faceR, faceY - faceR, faceR * 2, faceR * 2);
+            ctx.restore();
+            // 白色圆形边框
+            ctx.strokeStyle = '#FFF';
+            ctx.lineWidth = Math.max(2, vw * 0.03);
+            ctx.beginPath();
+            ctx.arc(0, faceY, faceR, 0, Math.PI * 2);
+            ctx.stroke();
+        } else {
+            // 照片未加载时的卡通脸降级
+            ctx.fillStyle = '#FFDDAA';
+            ctx.beginPath();
+            ctx.arc(0, faceY, faceR, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.strokeStyle = '#FFF';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+            const eyeY = faceY - faceR * 0.15;
+            const eyeGap = faceR * 0.35;
+            ctx.fillStyle = '#333';
+            ctx.beginPath();
+            ctx.arc(-eyeGap, eyeY, faceR * 0.12, 0, Math.PI * 2);
+            ctx.arc(eyeGap, eyeY, faceR * 0.12, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.strokeStyle = '#C07050';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(0, faceY + faceR * 0.12, faceR * 0.28, 0.15 * Math.PI, 0.85 * Math.PI);
+            ctx.stroke();
+        }
+
+        ctx.restore();
+    }
+
+    // -------- 辅助：圆角矩形 --------
+    _roundRect(ctx, x, y, w, h, r) {
+        r = Math.min(r, w / 2, h / 2);
+        ctx.beginPath();
+        ctx.moveTo(x + r, y);
+        ctx.lineTo(x + w - r, y);
+        ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+        ctx.lineTo(x + w, y + h - r);
+        ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+        ctx.lineTo(x + r, y + h);
+        ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+        ctx.lineTo(x, y + r);
+        ctx.quadraticCurveTo(x, y, x + r, y);
+        ctx.closePath();
+    }
+
+    // -------- UI 更新 --------
+    _updateScoreDisplay() {
+        document.getElementById('scoreNum').textContent = this.score;
+    }
+
+    _showSceneLabel(scene) {
+        const el = document.getElementById('sceneLabel');
+        el.textContent = scene.emoji + ' ' + scene.name;
+        el.classList.add('show');
+        setTimeout(() => el.classList.remove('show'), 1800);
+    }
+
+    _showCelebration() {
+        this.audio.playBonus();
+        const el = document.getElementById('celebrateText');
+        el.textContent = PRAISES[Math.floor(Math.random() * PRAISES.length)];
+        el.classList.add('show');
+        setTimeout(() => el.classList.remove('show'), 1500);
+        // 大量彩色粒子
+        const colors = ['#FFD700','#FF69B4','#00BFFF','#7FFF00','#FF6347','#DA70D6','#FFB700','#00FF88'];
+        for (let i = 0; i < 30; i++) {
+            const angle = Math.random() * Math.PI * 2;
+            const speed = 150 + Math.random() * 200;
+            this.particles.push({
+                x: this.W / 2 + (Math.random() - 0.5) * this.W * 0.5,
+                y: this.H * 0.4,
+                vx: Math.cos(angle) * speed,
+                vy: Math.sin(angle) * speed - 100,
+                life: 1.0 + Math.random() * 0.5,
+                maxLife: 1.5,
+                color: colors[Math.floor(Math.random() * colors.length)],
+                size: 4 + Math.random() * 5,
+            });
+        }
+    }
+
+    // -------- 触摸事件 --------
+    handleTouchStart(e) {
+        e.preventDefault();
+        this.audio.resume();
+        const t = e.touches ? e.touches[0] : e;
+        this.touchActive = true;
+        this.targetX = t.clientX;
+    }
+    handleTouchMove(e) {
+        e.preventDefault();
+        if (!this.touchActive) return;
+        const t = e.touches ? e.touches[0] : e;
+        this.targetX = t.clientX;
+    }
+    handleTouchEnd(e) {
+        e.preventDefault();
+        this.touchActive = false;
+    }
+}
+
+// ================================================================
+//  初始化
+// ================================================================
+const game = new Game();
+
+// 生成选车界面
+(function buildSelectScreen() {
+    const grid = document.getElementById('vehicleGrid');
+    VEHICLES.forEach(v => {
+        const card = document.createElement('div');
+        card.className = 'vehicle-card';
+        const iconHTML = v.cardIcon || '<div class="v-emoji">' + v.emoji + '</div>';
+        card.innerHTML = iconHTML + '<div class="v-name">' + v.name + '</div>';
+        const startGame = (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            game.start(v);
+        };
+        card.addEventListener('touchstart', startGame, { passive: false });
+        card.addEventListener('mousedown', startGame);
+        grid.appendChild(card);
+    });
+})();
+
+// 恢复上次选择的高亮（可选）
+try {
+    const last = localStorage.getItem('dabing_travel_lastVehicle');
+    if (last) {
+        const cards = document.querySelectorAll('.vehicle-card');
+        VEHICLES.forEach((v, i) => {
+            if (v.id === last && cards[i]) {
+                cards[i].style.boxShadow = '0 0 0 0.8vmin #FF6B9D, 0 1vmin 3vmin rgba(0,0,0,0.15)';
+            }
+        });
+    }
+} catch(e) {}
+
+// 游戏触摸事件绑定
+const canvas = document.getElementById('gameCanvas');
+canvas.addEventListener('touchstart', (e) => game.handleTouchStart(e), { passive: false });
+canvas.addEventListener('touchmove', (e) => game.handleTouchMove(e), { passive: false });
+canvas.addEventListener('touchend', (e) => game.handleTouchEnd(e), { passive: false });
+// 鼠标兼容（桌面测试）
+canvas.addEventListener('mousedown', (e) => game.handleTouchStart(e));
+canvas.addEventListener('mousemove', (e) => { if (game.touchActive) game.handleTouchMove(e); });
+canvas.addEventListener('mouseup', (e) => game.handleTouchEnd(e));
+
+// 键盘支持（电脑端：左右键 + 空格暂停）
+document.addEventListener('keydown', (e) => {
+    if (!game.running) return;
+    if (e.key === 'ArrowLeft')  { game.keysDown.left = true;  e.preventDefault(); }
+    if (e.key === 'ArrowRight') { game.keysDown.right = true; e.preventDefault(); }
+    if (e.key === ' ' || e.key === 'p' || e.key === 'P') { game.togglePause(); e.preventDefault(); }
+});
+document.addEventListener('keyup', (e) => {
+    if (e.key === 'ArrowLeft')  game.keysDown.left = false;
+    if (e.key === 'ArrowRight') game.keysDown.right = false;
+});
+
+// 音乐按钮
+const musicBtn = document.getElementById('musicBtn');
+musicBtn.addEventListener('touchstart', (e) => {
+    e.preventDefault(); e.stopPropagation();
+    const on = game.audio.toggleBGM();
+    musicBtn.textContent = on ? '🔊' : '🔇';
+}, { passive: false });
+musicBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const on = game.audio.toggleBGM();
+    musicBtn.textContent = on ? '🔊' : '🔇';
+});
+
+// 暂停按钮
+const pauseBtn = document.getElementById('pauseBtn');
+const pauseOverlay = document.getElementById('pauseOverlay');
+const handlePause = (e) => { e.preventDefault(); e.stopPropagation(); game.togglePause(); };
+pauseBtn.addEventListener('touchstart', handlePause, { passive: false });
+pauseBtn.addEventListener('click', handlePause);
+pauseOverlay.addEventListener('touchstart', (e) => {
+    e.preventDefault(); e.stopPropagation();
+    if (game.paused) game.togglePause();
+}, { passive: false });
+pauseOverlay.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (game.paused) game.togglePause();
+});
+
+// 返回按钮（长按 1 秒）
+const homeBtn = document.getElementById('homeBtn');
+let homePressTimer = null;
+const homeStart = (e) => {
+    e.preventDefault(); e.stopPropagation();
+    homePressTimer = setTimeout(() => { game.stop(); }, 1000);
+};
+const homeEnd = (e) => {
+    e.preventDefault(); e.stopPropagation();
+    if (homePressTimer) { clearTimeout(homePressTimer); homePressTimer = null; }
+};
+homeBtn.addEventListener('touchstart', homeStart, { passive: false });
+homeBtn.addEventListener('touchend', homeEnd, { passive: false });
+homeBtn.addEventListener('mousedown', homeStart);
+homeBtn.addEventListener('mouseup', homeEnd);
+homeBtn.addEventListener('mouseleave', homeEnd);
+</script>
+</body>
+</html>
