@@ -136,8 +136,22 @@ html, body { width: 100%; height: 100%; overflow: hidden; background: #000; font
     flex-direction: column; z-index: 30; cursor: pointer;
 }
 #pauseOverlay.show { display: flex; }
-#pauseOverlay .pause-play { font-size: 22vmin; line-height: 1; filter: drop-shadow(0 1vmin 2vmin rgba(0,0,0,0.3)); }
+#pauseOverlay .pause-play { font-size: 22vmin; line-height: 1; filter: drop-shadow(0 1vmin 2vmin rgba(0,0,0,0.3)); cursor: pointer; }
 #pauseOverlay .pause-hint { font-size: 5vmin; color: rgba(255,255,255,0.85); margin-top: 3vmin; }
+#pauseOverlay .pause-park { margin-top: 5vmin; width: min(88vw, 70vh); }
+#pauseOverlay .pause-park-title { font-size: 4vmin; color: rgba(255,255,255,0.7); margin-bottom: 2vmin; }
+#pauseOverlay .pause-park-grid {
+    display: grid; grid-template-columns: repeat(2, 1fr); gap: 2vmin;
+}
+#pauseOverlay .pp-card {
+    display: flex; align-items: center; gap: 2vmin;
+    background: rgba(255,255,255,0.18); border-radius: 2.5vmin;
+    padding: 2vmin 2.5vmin; text-decoration: none;
+    transition: background 0.15s;
+}
+#pauseOverlay .pp-card:active { background: rgba(255,255,255,0.32); }
+#pauseOverlay .pp-card .pp-emoji { font-size: 5.5vmin; }
+#pauseOverlay .pp-card .pp-name { font-size: 3.2vmin; color: #fff; font-weight: 600; }
 
 /* 返回按钮 */
 #homeBtn {
@@ -204,6 +218,15 @@ html, body { width: 100%; height: 100%; overflow: hidden; background: #000; font
     <div id="pauseOverlay">
         <div class="pause-play">▶️</div>
         <div class="pause-hint">点击继续</div>
+        <div class="pause-park">
+            <div class="pause-park-title">🎮 大饼游戏乐园</div>
+            <div class="pause-park-grid">
+                <a class="pp-card" href="https://xutao1988.github.io/game_qiaodishu/"><span class="pp-emoji">🔨</span><span class="pp-name">敲大饼大作战</span></a>
+                <a class="pp-card" href="https://xutao1988.github.io/game_animal_name/animal-game.html"><span class="pp-emoji">🐾</span><span class="pp-name">识别动物英文名</span></a>
+                <a class="pp-card" href="https://xutao1988.github.io/game_tank_battle/"><span class="pp-emoji">🎯</span><span class="pp-name">坦克大战</span></a>
+                <a class="pp-card" href="https://xutao1988.github.io/game_bubble/"><span class="pp-emoji">🫧</span><span class="pp-name">泡泡大作战</span></a>
+            </div>
+        </div>
     </div>
 </div>
 
@@ -238,6 +261,12 @@ const COLLECTIBLES = [
 ];
 
 const ANIMALS = ['🐶','🐱','🐰','🐼','🦊','🐸','🐥','🐷','🐮','🦁'];
+
+const OBSTACLES = [
+    { emoji: '🪨', label: '石头' },
+    { emoji: '🕳️', label: '小坑' },
+    { emoji: '🪵', label: '木头' },
+];
 
 const GREETINGS = [
     'Hello!', 'Hi!', 'Hey!', '嗨!', '你好!',
@@ -296,6 +325,14 @@ class AudioEngine {
         const t = this.ctx.currentTime;
         this._note(784, 0.1, t, 'sine', 0.3);
         this._note(1047, 0.15, t + 0.07, 'sine', 0.25);
+    }
+
+    playBump() {
+        if (!this.ctx) return;
+        const t = this.ctx.currentTime;
+        // 温和的"咚"声，不吓人
+        this._note(120, 0.15, t, 'sine', 0.2);
+        this._note(90, 0.2, t + 0.05, 'triangle', 0.15);
     }
 
     playBonus() {
@@ -394,6 +431,12 @@ class Game {
         this.collectTimer = 0;
         this.collectInterval = 1800; // ms
 
+        // 障碍物
+        this.obstacles = [];
+        this.obstacleTimer = 0;
+        this.obstacleInterval = 5000; // ms
+        this.shakeTimer = 0; // 碰撞晃动
+
         // 动物
         this.animals = [];
         this.animalTimer = 0;
@@ -490,6 +533,7 @@ class Game {
         this.score = 0;
         this.totalCollected = 0;
         this.collectibles = [];
+        this.obstacles = [];
         this.animals = [];
         this.particles = [];
         this.popups = [];
@@ -497,6 +541,8 @@ class Game {
         this.sceneTimer = 0;
         this.sceneTransition = 0;
         this.collectTimer = 0;
+        this.obstacleTimer = 0;
+        this.shakeTimer = 0;
         this.animalTimer = 0;
         this.nextMilestone = 10;
         this.roadScrollY = 0;
@@ -647,6 +693,52 @@ class Game {
             }
         }
 
+        // 生成障碍物（少量）
+        this.obstacleTimer += dtMs;
+        if (this.obstacleTimer >= this.obstacleInterval && this.obstacles.length < 2) {
+            this.obstacleTimer = 0;
+            this.obstacleInterval = 4500 + Math.random() * 4000;
+            this._spawnObstacle();
+        }
+
+        // 更新障碍物
+        for (let i = this.obstacles.length - 1; i >= 0; i--) {
+            const o = this.obstacles[i];
+            o.y += this.scrollSpeed * dt;
+            // 碰撞检测
+            if (!o.hit) {
+                const dx = o.x - this.vx;
+                const dy = o.y - this.vy;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                const hitR = this.W * 0.065;
+                if (dist < hitR) {
+                    o.hit = true;
+                    this.shakeTimer = 500; // 晃动 500ms
+                    this.audio.playBump();
+                    // 小灰尘粒子
+                    for (let j = 0; j < 6; j++) {
+                        const angle = Math.random() * Math.PI * 2;
+                        const speed = 60 + Math.random() * 60;
+                        this.particles.push({
+                            x: o.x, y: o.y,
+                            vx: Math.cos(angle) * speed,
+                            vy: Math.sin(angle) * speed,
+                            life: 0.4 + Math.random() * 0.2,
+                            maxLife: 0.6,
+                            color: '#999',
+                            size: 2 + Math.random() * 3,
+                        });
+                    }
+                }
+            }
+            if (o.y > this.H + 80) {
+                this.obstacles.splice(i, 1);
+            }
+        }
+
+        // 更新晃动
+        if (this.shakeTimer > 0) this.shakeTimer -= dtMs;
+
         // 生成动物
         this.animalTimer += dtMs;
         if (this.animalTimer >= this.animalInterval && this.animals.length < 2) {
@@ -719,6 +811,22 @@ class Game {
             type: type,
             age: 0,
             bobPhase: Math.random() * Math.PI * 2,
+        });
+    }
+
+    // -------- 生成障碍物 --------
+    _spawnObstacle() {
+        const lane = Math.floor(Math.random() * 3);
+        const cx = this.roadL + this.laneW * (lane + 0.5);
+        const type = OBSTACLES[Math.floor(Math.random() * OBSTACLES.length)];
+        // 避免和最近的收集物重叠在同一车道
+        const tooClose = this.collectibles.some(c => Math.abs(c.x - cx) < this.laneW * 0.5 && c.y < this.H * 0.15);
+        if (tooClose) return; // 跳过这次，下次再生成
+        this.obstacles.push({
+            x: cx,
+            y: -50,
+            type: type,
+            hit: false,
         });
     }
 
@@ -921,6 +1029,25 @@ class Game {
             ctx.restore();
         }
 
+        // 障碍物
+        const oSize = W * 0.08;
+        ctx.font = oSize + 'px serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        for (const o of this.obstacles) {
+            if (o.hit) {
+                ctx.globalAlpha = 0.4;
+            }
+            // 阴影
+            ctx.fillStyle = 'rgba(0,0,0,0.15)';
+            ctx.beginPath();
+            ctx.ellipse(o.x + 2, o.y + oSize * 0.35, oSize * 0.4, oSize * 0.15, 0, 0, Math.PI * 2);
+            ctx.fill();
+            // emoji
+            ctx.fillText(o.type.emoji, o.x, o.y);
+            ctx.globalAlpha = 1;
+        }
+
         // 车辆
         this._drawVehicle(ctx);
 
@@ -960,7 +1087,12 @@ class Game {
         const cy = this.vy;
 
         ctx.save();
-        ctx.translate(cx, cy);
+        // 碰撞晃动效果
+        let shakeX = 0;
+        if (this.shakeTimer > 0) {
+            shakeX = Math.sin(this.shakeTimer * 0.05) * (this.shakeTimer / 500) * vw * 0.15;
+        }
+        ctx.translate(cx + shakeX, cy);
 
         // 车身（小汽车单独绘制更精细的造型）
         if (v.id !== 'car') {
@@ -1431,10 +1563,13 @@ const handlePause = (e) => { e.preventDefault(); e.stopPropagation(); game.toggl
 pauseBtn.addEventListener('touchstart', handlePause, { passive: false });
 pauseBtn.addEventListener('click', handlePause);
 pauseOverlay.addEventListener('touchstart', (e) => {
+    // 点击游戏链接时不恢复游戏
+    if (e.target.closest('.pp-card')) return;
     e.preventDefault(); e.stopPropagation();
     if (game.paused) game.togglePause();
 }, { passive: false });
 pauseOverlay.addEventListener('click', (e) => {
+    if (e.target.closest('.pp-card')) return;
     e.stopPropagation();
     if (game.paused) game.togglePause();
 });
