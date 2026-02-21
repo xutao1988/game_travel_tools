@@ -436,6 +436,7 @@ class Game {
         this.obstacleTimer = 0;
         this.obstacleInterval = 5000; // ms
         this.shakeTimer = 0; // 碰撞晃动
+        this.happyTimer = 0; // 收集开心晃动
 
         // 动物
         this.animals = [];
@@ -543,6 +544,7 @@ class Game {
         this.collectTimer = 0;
         this.obstacleTimer = 0;
         this.shakeTimer = 0;
+        this.happyTimer = 0;
         this.animalTimer = 0;
         this.nextMilestone = 10;
         this.roadScrollY = 0;
@@ -738,6 +740,7 @@ class Game {
 
         // 更新晃动
         if (this.shakeTimer > 0) this.shakeTimer -= dtMs;
+        if (this.happyTimer > 0) this.happyTimer -= dtMs;
 
         // 生成动物
         this.animalTimer += dtMs;
@@ -836,6 +839,7 @@ class Game {
         this.totalCollected++;
         this._updateScoreDisplay();
         this.audio.playCollect();
+        this.happyTimer = 400; // 大饼开心晃动
 
         // 粒子特效
         const colors = ['#FFD700', '#FF69B4', '#00BFFF', '#7FFF00', '#FF6347', '#DA70D6'];
@@ -1365,37 +1369,49 @@ class Game {
         const faceY = v.id === 'rocket' ? -vh * 0.05 : -vh * 0.08;
         const photo = this.currentPhoto;
 
+        // 收集奖励时的开心晃动
+        ctx.save();
+        ctx.translate(0, faceY);
+        if (this.happyTimer > 0) {
+            const t = this.happyTimer;
+            const wobble = Math.sin(t * 0.04) * (t / 400) * 0.2;  // 左右摇摆
+            const bounce = Math.sin(t * 0.025) * (t / 400) * faceR * 0.12; // 上下弹跳
+            const grow = 1 + Math.sin(t * 0.02) * (t / 400) * 0.08; // 微微放大
+            ctx.translate(0, bounce);
+            ctx.rotate(wobble);
+            ctx.scale(grow, grow);
+        }
+
         if (photo && photo.complete && photo.naturalWidth > 0) {
             // 圆形裁剪绘制真实照片
             ctx.save();
             ctx.beginPath();
-            ctx.arc(0, faceY, faceR, 0, Math.PI * 2);
+            ctx.arc(0, 0, faceR, 0, Math.PI * 2);
             ctx.closePath();
             ctx.clip();
-            // 居中偏上裁剪（人脸通常在照片上半部分）
             const iw = photo.naturalWidth, ih = photo.naturalHeight;
             const minDim = Math.min(iw, ih);
             const sx = (iw - minDim) / 2;
-            const sy = (ih - minDim) * 0.15; // 偏上取脸部
+            const sy = (ih - minDim) * 0.15;
             ctx.drawImage(photo, sx, sy, minDim, minDim,
-                -faceR, faceY - faceR, faceR * 2, faceR * 2);
+                -faceR, -faceR, faceR * 2, faceR * 2);
             ctx.restore();
             // 白色圆形边框
             ctx.strokeStyle = '#FFF';
             ctx.lineWidth = Math.max(2, vw * 0.03);
             ctx.beginPath();
-            ctx.arc(0, faceY, faceR, 0, Math.PI * 2);
+            ctx.arc(0, 0, faceR, 0, Math.PI * 2);
             ctx.stroke();
         } else {
             // 照片未加载时的卡通脸降级
             ctx.fillStyle = '#FFDDAA';
             ctx.beginPath();
-            ctx.arc(0, faceY, faceR, 0, Math.PI * 2);
+            ctx.arc(0, 0, faceR, 0, Math.PI * 2);
             ctx.fill();
             ctx.strokeStyle = '#FFF';
             ctx.lineWidth = 2;
             ctx.stroke();
-            const eyeY = faceY - faceR * 0.15;
+            const eyeY = -faceR * 0.15;
             const eyeGap = faceR * 0.35;
             ctx.fillStyle = '#333';
             ctx.beginPath();
@@ -1405,11 +1421,12 @@ class Game {
             ctx.strokeStyle = '#C07050';
             ctx.lineWidth = 2;
             ctx.beginPath();
-            ctx.arc(0, faceY + faceR * 0.12, faceR * 0.28, 0.15 * Math.PI, 0.85 * Math.PI);
+            ctx.arc(0, faceR * 0.12, faceR * 0.28, 0.15 * Math.PI, 0.85 * Math.PI);
             ctx.stroke();
         }
+        ctx.restore(); // 开心晃动 restore
 
-        ctx.restore();
+        ctx.restore(); // 车辆整体 restore
     }
 
     // -------- 辅助：圆角矩形 --------
